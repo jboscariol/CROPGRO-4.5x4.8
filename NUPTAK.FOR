@@ -19,10 +19,9 @@ C=======================================================================
      &  TRNH4U, TRNO3U, TRNU, UNH4, UNO3)                 !Output
 
 !-----------------------------------------------------------------------
-      USE ModuleDefs     !Definitions of constructed variable types, 
-                         ! which contain control information, soil
-                         ! parameters, hourly weather data.
+      USE ModuleDefs
       IMPLICIT NONE
+      EXTERNAL GETLUN, FIND, ERROR, IGNORE
       SAVE
 
       CHARACTER*6 ERRKEY
@@ -99,16 +98,16 @@ C=======================================================================
 !-----------------------------------------------------------------------
 C   Initialize variables
 C-----------------------------------------------------------------------
-      TRNU  = 0.0
-      TRNO3U= 0.0
-      TRNH4U= 0.0
-      NUF   = 0.0
-      XMIN  = 0.0
-      RNO3U = 0.0
-      RNH4U = 0.0
-      UNH4  = 0.0
-      UNO3  = 0.0
+      TRNU   = 0.0
+      TRNO3U = 0.0
+      TRNH4U = 0.0
+      NUF    = 0.0
+      XMIN   = 0.0
       DO L=1,NLAYR
+        RNO3U(L) = 0.0
+        RNH4U(L) = 0.0
+        UNH4(L)  = 0.0
+        UNO3(L)  = 0.0
         !KG2PPM(L) = 10. / (BD(L) * DLAYR(L))
         SNO3(L) = NO3(L) / KG2PPM(L)
         SNH4(L) = NH4(L) / KG2PPM(L)
@@ -132,23 +131,24 @@ C-----------------------------------------------------------------------
 
 !           SMDFR = relative drought factor
             SMDFR = (SW(L) - LL(L)) / (DUL(L) - LL(L))
-            IF (SMDFR .LT. 1.E-9) SMDFR = 0.0
+
             IF (SW(L) .GT. DUL(L)) THEN
               SMDFR = 1.0 - (SW(L) - DUL(L)) / (SAT(L) - DUL(L))
             ENDIF
-
-!           RLV = Rootlength density (cm/cm3)
-            RFAC = RLV(L) * SMDFR * SMDFR * DLAYR(L)
-!           cm[root]/cm2[soil] = cm[root]/cm3[soil] * cm[soil]
-
-!           RTNO3 + RTNH4 = Nitrogen uptake / root length (mg N/cm)
-!           RNO3U + RNH4  = Nitrogen uptake (kg N/ha)
-            RNO3U(L) = RFAC * FNO3 * RTNO3 * 100.0
-            RNH4U(L) = RFAC * FNH4 * RTNH4 * 100.0
-!           kg[N]   cm[root]     mg[N]     100 kg/ha
-!           ----- = --------- * -------- * ---------
-!             ha    cm2[soil]   cm[root]     mg/cm2
-
+            
+            IF (SMDFR .LT. 0.1) THEN
+              SMDFR = 0.1
+            ENDIF
+            ! FO/KJB - Change for Cotton
+            !RFAC = RLV(L) * SMDFR * SMDFR * DLAYR(L) * 100.0
+            RFAC = RLV(L) * SQRT(SMDFR) * DLAYR(L) * 100.0
+C-----------------------------------------------------------------------
+C  RLV = Rootlength density (cm/cm3);SMDFR = relative drought factor
+C  RTNO3 + RTNH4 = Nitrogen uptake / root length (mg N/cm)
+C  RNO3U + RNH4  = Nitrogen uptake (kg N/ha)
+C-----------------------------------------------------------------------
+            RNO3U(L) = RFAC * FNO3 * RTNO3
+            RNH4U(L) = RFAC * FNH4 * RTNH4
             RNO3U(L) = MAX(0.0,RNO3U(L))
             RNH4U(L) = MAX(0.0,RNH4U(L))
             TRNU = TRNU + RNO3U(L) + RNH4U(L) !kg[N]/ha
@@ -160,8 +160,8 @@ C-----------------------------------------------------------------------
         IF (ANDEM .GT. TRNU) THEN
           ANDEM = TRNU
         ENDIF
-
-        IF (TRNU .GT. 0.001) THEN
+!        IF (TRNU .EQ. 0.0) GO TO 600
+        IF (TRNU .GT. 0.0) THEN
           NUF = ANDEM / TRNU
           DO L=1,NLAYR
             IF (RLV(L) .GT. 0.0) THEN
@@ -179,11 +179,13 @@ C-----------------------------------------------------------------------
               TRNH4U  = TRNH4U + UNH4(L)
             ENDIF
           ENDDO
-
-!         Convert uptake to g/m^2
+C-----------------------------------------------------------------------
+C   Convert uptake to g/m^2
+C-----------------------------------------------------------------------
           TRNO3U = TRNO3U / 10.0
           TRNH4U = TRNH4U / 10.0
           TRNU   = TRNO3U + TRNH4U
+C-----------------------------------------------------------------------
         ENDIF
       ENDIF
 
@@ -194,7 +196,7 @@ C-----------------------------------------------------------------------
       ENDIF
 !***********************************************************************
       RETURN
-      END SUBROUTINE NUPTAK
+      END ! SUBROUTINE NUPTAK
 C=======================================================================
 
 !-----------------------------------------------------------------------
@@ -220,10 +222,10 @@ C=======================================================================
 ! NDMSDR   Amount of Mobilized N which can be used for seed growth
 !            (g[N] / m2 / d)
 ! NDMTOT   Total N demand (g[N] / m2 / d)
-! NH4(L)   Ammonium N in soil layer L (µg[N] / g[soil])
+! NH4(L)   Ammonium N in soil layer L (Âµg[N] / g[soil])
 ! NL       maximum number of soil layers = 20 
 ! NLAYR    Number of soil layers 
-! NO3(L)   Nitrate in soil layer L (µg[N] / g[soil])
+! NO3(L)   Nitrate in soil layer L (Âµg[N] / g[soil])
 ! NUF      N uptake fraction (ratio of demand to N uptake), <= 1.0 
 ! RFAC     Nitrogen uptake conversion factor ((kg N/ha) / (mg N / cm root))
 ! RLV(L)   Root length density for soil layer L ((cm root / cm3 soil))

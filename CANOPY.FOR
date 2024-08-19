@@ -20,14 +20,13 @@ C========================================================================
 
       SUBROUTINE CANOPY(DYNAMIC, 
      &    ECONO, FILECC, FILEGC, KCAN, PAR, ROWSPC,       !Input
-     &    RVSTGE, TGRO, TURFAC, VSTAGE, XLAI,             !Input
+     &    RVSTGE, TGRO, TURFAC, VSTAGE, XLAI, NSTRES,     !Input
      &    CANHT, CANWH)                                   !Output
 
 C-----------------------------------------------------------------------
-      USE ModuleDefs     !Definitions of constructed variable types, 
-                         ! which contain control information, soil
-                         ! parameters, hourly weather data.
+      USE ModuleDefs
       IMPLICIT NONE
+      EXTERNAL GETLUN, FIND, ERROR, IGNORE, TABEX
       SAVE
 
       CHARACTER*6 ERRKEY
@@ -50,6 +49,9 @@ C-----------------------------------------------------------------------
       REAL XHWPAR(10), XHWTEM(10), YHWPAR(10), YHWTEM(10)
       REAL XVSHT(15), YVSHT(15), YVSWH(15)
       REAL TGRO(TS)
+      
+! Fo Cotton-Nitrogen
+      REAL NHGT,HNHGT,NSTRES,CUMNHT
 
 !***********************************************************************
 !***********************************************************************
@@ -121,6 +123,10 @@ C-----------------------------------------------------------------------
         CALL IGNORE(LUNCRP,LNUM,ISECT,C255)
         READ(C255,'(8F6.0)',IOSTAT=ERR)(YHWPAR(II),II = 1,8)
         IF (ERR .NE. 0) CALL ERROR(ERRKEY,ERR,FILECC,LNUM)
+        
+        CALL IGNORE(LUNCRP,LNUM,ISECT,C255)
+        READ(C255,'(F6.0)',IOSTAT=ERR) NHGT
+        IF (ERR .NE. 0) CALL ERROR(ERRKEY,ERR,FILECC,LNUM)
       ENDIF
 
       CLOSE (LUNCRP)
@@ -165,6 +171,9 @@ C-----------------------------------------------------------------------
 !-----------------------------------------------------------------------
       CANHT = 0.0
       CANWH = 0.0
+      
+      HNHGT = 1.0
+      CUMNHT= 1.0
 
 !***********************************************************************
 !***********************************************************************
@@ -185,10 +194,11 @@ C-----------------------------------------------------------------------
 C     Calculate effect of temperature on canopy expansion, HWTEM
 C-----------------------------------------------------------------------
       HWTEM = 0.0
-      DO I = 1, 24
+      DO I = 1, TS
         HWTEM = HWTEM + TABEX(YHWTEM,XHWTEM,TGRO(I),5)
       ENDDO
-      HWTEM = HWTEM / 24.
+      HWTEM = HWTEM /TS
+C       24 changed to TS on 5 July 2017 by Bruce Kimball
 
 C-----------------------------------------------------------------------
 C     Calculate effect of day's PAR on canopy expansion, HPAR.
@@ -205,10 +215,19 @@ C-----------------------------------------------------------------------
       HPAR = TABEX(YHWPAR,XHWPAR,PARNOD,8)
       WPAR = TABEX(YHWPAR,XHWPAR,PAR,8)
 C-----------------------------------------------------------------------
+!     Nitogen effect on canopy height and width by KJB
+C-----------------------------------------------------------------------
+      IF(NHGT .GT. 1.4)THEN                     !To limit NGHT to 1.4
+          NHGT = 1.4 
+      ENDIF
+      HNHGT = MAX(0.1, (1.0 - (1.0 - NSTRES)*NHGT))
+      CUMNHT = 0.75*CUMNHT + 0.25*HNHGT
+C-----------------------------------------------------------------------
 C     Calculate rate of increase in canopy height and update height, CANHT
+!     KJB - Added CUMNHT to RCANWH calculation
 C-----------------------------------------------------------------------
       RCANHT= RVSTGE * TABEX(YVSHT,XVSHT,VSTAGE,10) * HWTEM *
-     &  TURFAC * HPAR * RHGHT
+     &  TURFAC * HPAR * RHGHT * CUMNHT
       CANHT = CANHT + RCANHT
 
 !     Set minimum Canopy height based on lookup function
@@ -220,10 +239,11 @@ C     RWIDTH,RHGHT are used to normalize other crops to the values in tables
 C     Values of RHGHT and RWIDTH = 1.00 are for Florunner peanut variety
 C     1/22/03 KJB - Don't allow reduction in vstage to reduce canopy
 C       width.
+!     KJB - Added CUMNHT to RCANWH calculation
 !-----------------------------------------------------------------------
       RCANWH= MAX(0.0,RVSTGE) * TABEX(YVSWH,XVSHT,VSTAGE,10) * HWTEM *
-     &  TURFAC * WPAR * RWIDTH
-      CANWH = CANWH + RCANWH
+     &  TURFAC * WPAR * RWIDTH * CUMNHT
+      CANWH = CANWH + RCANWH 
 
 !     Set minimum Canopy width based on lookup function
       CANWH = MAX(CANWH, TABEX(YVSWH, XVSHT, 0.0, 10))  
@@ -274,7 +294,7 @@ C       width.
 ! RWIDTH    Relative width of this ecotype in comparison to the standard 
 !             width per node (YVSWH) defined in the species file (*.SPE) (m)
 ! SECTION   Section name in input file 
-! TGRO(I)   Hourly canopy temperature (°C)
+! TGRO(I)   Hourly canopy temperature (Â°C)
 ! TURFAC    Water stress factor for expansion (0 - 1) 
 ! VSTAGE    Number of nodes on main stem of plant (nodes)
 ! WPAR      Effect of PAR on canopy width 
@@ -282,7 +302,7 @@ C       width.
 !             growth rate, particularly to allow etiliolation at low PAR 
 !             values (mol/day)
 ! XHWTEM    Temperatures in a table look-up function for modifying height 
-!             and width growth rates (°C)
+!             and width growth rates (Â°C)
 ! XLAI      Leaf area (one side) per unit of ground area
 !            (m2[leaf] / m2[ground])
 ! XVSHT     Node number on main stem for use in computing height and width 

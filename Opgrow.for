@@ -5,7 +5,7 @@ C  Generates output file for daily growth variables
 C-----------------------------------------------------------------------
 C  REVISION       HISTORY
 C  01/01/1990 GH  Written
-C  09/21/1998 CHP Split off from OPDAY.FOR file
+C  09/21/1998 CHP Split off from OPDAY.for file
 C  05/11/1999 GH  Incorporated in CROPGRO
 C  06/19/2001 GH  Modified output format
 C  08/20/2002 GH  Modified for Y2K
@@ -30,7 +30,11 @@ C  Calls:     None
       USE ModuleDefs     !Definitions of constructed variable types, 
                          ! which contain control information, soil
                          ! parameters, hourly weather data.
+!     VSH
+      USE CsvOutput 
+      USE Linklist
       IMPLICIT NONE
+      EXTERNAL GETLUN, HEADER, TIMDIF, YR_DOY
       SAVE
 !-----------------------------------------------------------------------
       CHARACTER*1  IDETG, ISWPHO, ISWPOT
@@ -98,6 +102,8 @@ C  Calls:     None
 
       ISWPHO = ISWITCH % ISWPHO
       ISWPOT = ISWITCH % ISWPOT
+          
+      FMOPT  = ISWITCH % FMOPT    ! VSH
 
 !***********************************************************************
 !***********************************************************************
@@ -105,6 +111,7 @@ C  Calls:     None
 !***********************************************************************
       IF (DYNAMIC .EQ. RUNINIT) THEN
 !-----------------------------------------------------------------------
+        IF (FMOPT == 'A' .OR. FMOPT == ' ') THEN    ! VSH
         OUTG  = 'PlantGro.OUT'
         CALL GETLUN('OUTG',  NOUTDG)
 
@@ -113,6 +120,7 @@ C  Calls:     None
 
         OUTPC  = 'PlantC.OUT  '
         CALL GETLUN('OUTPC', NOUTPC)
+        END IF    ! VSH
 
 !***********************************************************************
 !***********************************************************************
@@ -120,7 +128,8 @@ C  Calls:     None
 !***********************************************************************
       ELSEIF (DYNAMIC .EQ. SEASINIT) THEN
 !-----------------------------------------------------------------------
-!       Initialize daily growth output file
+        IF (FMOPT == 'A' .OR. FMOPT == ' ') THEN    ! VSH
+!       Initialize daily growth output file      
         INQUIRE (FILE = OUTG, EXIST = FEXIST)
         IF (FEXIST) THEN
           OPEN (UNIT = NOUTDG, FILE = OUTG, STATUS = 'OLD',
@@ -135,10 +144,12 @@ C  Calls:     None
 
         !Write headers
         CALL HEADER(SEASINIT, NOUTDG, RUN)
-
+        END IF    ! VSH
+        
         N_LYR = MIN(10, MAX(4,SOILPROP%NLAYR))
 
-!        IF (ISWPHO == 'Y') THEN
+        IF (FMOPT == 'A' .OR. FMOPT == ' ') THEN    ! VSH
+!        IF (ISWPHO .NE. 'N') THEN
           WRITE (NOUTDG, 100) "Root Dens. (cm/cm3) by soil ",
      &      "depth (cm):",(SoilProp%LayerText(L), L=1,N_LYR)
   100     FORMAT("!",244X,A,A,/,"!",239X,10A8) 
@@ -153,7 +164,7 @@ C  Calls:     None
      &         '   RWAD   VWAD   CWAD   G#AD    GWGD   HIAD   PWAD',
      &         '   P#AD   WSPD   WSGD   NSTD')
 
-!        IF (ISWPHO .EQ. 'Y') THEN
+!        IF (ISWPHO .NE. 'N') THEN
           WRITE (NOUTDG,"('  PST1A  PST2A')", ADVANCE='NO')
 !        ENDIF
 !        IF (ISWPOT .EQ. 'Y') THEN
@@ -222,7 +233,8 @@ C  Calls:     None
   250   FORMAT('@YEAR DOY   DAS   DAP   TWAD    PHAD',
      &      '    CMAD    CGRD    GRAD    MRAD    CHAD   CL%D   CS%D',
      &      '   TGNN   TGAV    GN%D    GL%D    GC%D')
-
+        END IF ! VSH
+        
         CUMSENSURF  = 0.0
         CUMSENSOIL  = 0.0
         CUMSENSURFN = 0.0
@@ -348,6 +360,7 @@ C-----------------------------------------------------------------------
 
           VWAD = NINT(WTLF*10. + STMWT*10.)
 
+          IF (FMOPT == 'A' .OR. FMOPT == ' ') THEN   ! VSH
           WRITE (NOUTDG,310, ADVANCE='NO')
      &        YEAR, DOY, DAS, DAP, VSTAGE, RSTAGE, XLAI,
      &        NINT(WTLF*10.), NINT(STMWT*10.), NINT(SDWT*10.),
@@ -358,7 +371,7 @@ C-----------------------------------------------------------------------
      &        1X,F6.1,1X,I6,1X,F6.3,   7(1X,I6),
      &        1X,F7.1,1X,F6.3,2(1X,I6),3(1X,F6.3))
 
-!          IF (ISWPHO .EQ. 'Y') THEN
+!          IF (ISWPHO .NE. 'N') THEN
             WRITE (NOUTDG,'(2(1X,F6.3))', ADVANCE='NO') PS1_AV, PS2_AV
 !          ENDIF
 
@@ -377,7 +390,21 @@ C-----------------------------------------------------------------------
      &        NINT(CUMSENSURF), NINT(CUMSENSOIL)   !, SENSURFT, SENSOILT
 !     &        , EOP, TRWUP, WRDOTN
   316     FORMAT (I8,1X,I7, 2F8.3, 3F8.4)
-
+          END IF   ! VSH
+!-----------------------------------------------------------------------
+!     VSH CSV output corresponding to PlantGro.OUT
+      IF (FMOPT == 'C') THEN
+         CALL CsvOut(EXPNAME,CONTROL%RUN, CONTROL%TRTNUM,CONTROL%ROTNUM
+     &,CONTROL%REPNO, YEAR, DOY, DAS, DAP, VSTAGE, RSTAGE, XLAI, 
+     &WTLF, STMWT, SDWT, RTWT, VWAD, TOPWT, SEEDNO, SDSIZE, HI, PODWT,
+     &PODNO, SWF_AV, TUR_AV, NST_AV, PS1_AV, PS2_AV, KST_AV, EXW_AV,
+     &PCNLP, SHELPC, HIP, PODWTD, SLAP, CANHT, CANWH,
+     &DWNOD, RTDEP, N_LYR, RLV, CUMSENSURF, CUMSENSOIL,
+     &vCsvline, vpCsvline, vlngth)
+     
+         CALL Linklst(vCsvline)
+      END IF
+      
 !         Set average stress factors since last printout back to zero
           SWF_AV = 0.0
           TUR_AV = 0.0
@@ -423,6 +450,7 @@ C-----------------------------------------------------------------------
             PCNVEG = 0.
           ENDIF
 
+          IF (FMOPT == 'A' .OR. FMOPT == ' ') THEN       ! VSH
           WRITE (NOUTPN,410) YEAR, DOY, DAS, DAP, (WTNCAN*10), 
      &       (WTNSD*10), (WTNVEG*10), PCNSDP, PCNVEG, (WTNFX*10),
      &       (WTNUP*10), (WTNLF*10), (WTNST*10), PCNLP, PCNSTP,
@@ -430,16 +458,40 @@ C-----------------------------------------------------------------------
   410     FORMAT(1X,I4,1X,I3.3,2(1X,I5),3(1X,F7.1),2(1X,F7.2),1X,
      &       2(1X,F7.1),2(1X,F7.1),2(1X,F7.2),1X,F7.1,2(1X,F6.1),
      &       2(1X,F7.2))
-
+          END IF    ! VSH
+          
+          !     VSH
+      IF (FMOPT == 'C') THEN
+         CALL CsvOutPlNCrGro(EXPNAME, CONTROL%RUN, CONTROL%TRTNUM, 
+     &CONTROL%ROTNUM, CONTROL%REPNO, YEAR, DOY, DAS, DAP, 
+     &WTNCAN, WTNSD, WTNVEG, PCNSDP, PCNVEG, WTNFX, WTNUP, 
+     &WTNLF, WTNST, PCNLP, PCNSTP, PCNSHP, PCNRTP, NFIXN, 
+     &CUMSENSURFN, CUMSENSOILN,
+     &vCsvlinePlNCrGro, vpCsvlinePlNCrGro, vlngthPlNCrGro)
+     
+         CALL LinklstPlNCrGro(vCsvlinePlNCrGro)
+      
+         CALL CsvOutPlCCrGro(EXPNAME, CONTROL%RUN, CONTROL%TRTNUM, 
+     &CONTROL%ROTNUM, CONTROL%REPNO, YEAR, DOY, DAS, DAP, 
+     &TOTWT, PG, CMINEA, GROWTH, GRWRES, MAINR, CADLF, 
+     &CADST, RHOLP, RHOSP, TGRO, TGROAV, PCNSDP, PCLSDP, 
+     &PCCSDP, TS, 
+     &vCsvlinePlCCrGro, vpCsvlinePlCCrGro, vlngthPlCCrGro)
+      
+         CALL LinklstPlCCrGro(vCsvlinePlCCrGro)    
+      END IF
 C-----------------------------------------------------------------------
+          IF (FMOPT == 'A' .OR. FMOPT == ' ') THEN ! VSH
           WRITE (NOUTPC,510) YEAR, DOY, DAS, DAP,
      &        NINT(TOTWT*10), PG, CMINEA, GROWTH,
      &        GRWRES, MAINR, (CADLF + CADST), RHOLP, RHOSP,
-     &        TGRO(12), TGROAV, PCNSDP, PCLSDP, PCCSDP
+     &        TGRO(TS/2), TGROAV, PCNSDP, PCLSDP, PCCSDP
+C       changed from 12 to TS/2 on 9Jul17 by Bruce Kimball
   510     FORMAT(1X,I4,1X,I3.3,2(1X,I5),1X,I6,5(F8.4),F8.5,2(F7.3),
      &        2(1X,F6.3),3(1X,F7.4))
 !  510     FORMAT(1X,I4,1X,I3.3,2(1X,I5),1X,I6,6(1X,F7.2),2(1X,F6.1),
 !     &        2(1X,F6.1),3(1X,F7.2))
+          END IF   ! VSH
         ENDIF       
 
 !***********************************************************************
@@ -448,10 +500,12 @@ C-----------------------------------------------------------------------
 !***********************************************************************
       ELSE IF (DYNAMIC .EQ. SEASEND) THEN
 C-----------------------------------------------------------------------
+        IF (FMOPT == 'A' .OR. FMOPT == ' ') THEN   ! VSH
         !Close daily output files.
         CLOSE (NOUTDG)
         CLOSE (NOUTPN)
         CLOSE (NOUTPC)
+        END IF   ! VSH
 
 !***********************************************************************
 !***********************************************************************

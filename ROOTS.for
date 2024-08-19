@@ -29,18 +29,18 @@ C  05/11/1999 GH  Incorporated in CROPGRO
 !  Calls      :  IPROOT, INROOT
 !=======================================================================
 
-       SUBROUTINE ROOTS(DYNAMIC,
+      SUBROUTINE ROOTS(DYNAMIC,
      &    AGRRT, CROP, DLAYR, DS, DTX, DUL, FILECC, FRRT, !Input
      &    ISWWAT, LL, NLAYR, PG, PLTPOP, RO, RP, RTWT,    !Input
      &    SAT, SW, SWFAC, VSTAGE, WR, WRDOTN, WTNEW,      !Input
-     &    RLV, RTDEP, SATFAC, SENRT, SRDOT,               !Output
-     &    TotRootMass, CumRootMass, RFAC3)                !Output
+     &    RLV, RTDEP, SATFAC, SENRT, SRDOT)               !Output
 
 C-----------------------------------------------------------------------
       USE ModuleDefs     !Definitions of constructed variable types, 
                          ! which contain control information, soil
                          ! parameters, hourly weather data.
       IMPLICIT NONE
+      EXTERNAL IPROOT, INROOT, TABEX
       SAVE
 
       CHARACTER*1 ISWWAT
@@ -60,7 +60,7 @@ C-----------------------------------------------------------------------
       REAL SWEXF, PORMIN, RTEXF, RTSURV
       REAL RTDEPI, SUMEX, SUMRL, SATFAC
       REAL PLTPOP, WTNEW, VSTAGE
-      REAL TABEX              !Function subroutine located in UTILS.FOR
+      REAL TABEX              !Function subroutine located in UTILS.for
       REAL XRTFAC(4), YRTFAC(4)
       REAL DLAYR(NL), DS(NL), DUL(NL), ESW(NL), LL(NL), RLDF(NL)
       REAL RLGRW(NL), RLSEN(NL), RLV(NL), RLV_WS(NL), RRLF(NL)
@@ -396,6 +396,7 @@ C=======================================================================
 !     NL defined in ModuleDefs.for
 
       IMPLICIT NONE
+      EXTERNAL GETLUN, FIND, ERROR, IGNORE
 
       CHARACTER*6 ERRKEY
       PARAMETER (ERRKEY = 'ROOTS')
@@ -540,6 +541,7 @@ C-----------------------------------------------------------------------
 !             layer L (cm3 [H2O] /cm3 [soil])
 ! ESW(L)    Plant extractable soil water by layer (= DUL - LL) (cm3/cm3)
 ! FILECC    Path plus filename for species file (*.spe) 
+! RFAC3     Ratio of root length to root weight at the current time (cm/g)
 ! FRRT      Fraction of vegetative tissue growth that goes to roots on a 
 !             day (g[root] / g[veg])
 ! GRESPR(L) Growth respiration for new root growth in layer L 

@@ -62,7 +62,7 @@ C=======================================================================
 
 !     No residue left in fallow field.  
 !     Residue only computed for sequenced runs.
-      IF (CROP /= 'FA' .AND. INDEX('PQF',CONTROL%RNMODE) > 0) THEN
+      IF (CROP /= 'FA' .AND. INDEX('QF',CONTROL%RNMODE) > 0) THEN
 
 !-------------------------------------------------------------------------
 !       Shoot residues.
